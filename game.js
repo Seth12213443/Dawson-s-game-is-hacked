@@ -1111,3 +1111,171 @@ document.getElementById('settings-dialog').addEventListener('close', () => {
 document.addEventListener('pointerdown', createClickParticles);
 initializeSettings();
 
+/**
+ * Verity Craft - Standalone Developer Diagnostics & Testing Utility
+ * Intended for isolated testing, state verification, and network simulation.
+ */
+(function() {
+    // 1. Core Verification Checks
+    if (typeof window.gamePlayers === 'undefined') {
+        console.error("[DevTools Error] Essential game state variables not found. Ensure game.js is loaded first.");
+        return;
+    }
+
+    // Prevent duplicate initialization
+    if (window.__VerityDevToolsInstance) {
+        window.__VerityDevToolsInstance.destroy();
+    }
+
+    console.log("%c[Verity Craft DevTools] Loaded. Initializing testing overlay...", "color: #176b55; font-weight: bold; font-size: 12px;");
+
+    // 2. Structural Injector (UI Isolation)
+    const uiContainer = document.createElement('div');
+    uiContainer.id = 'verity-dev-overlay';
+    
+    // Apply sandboxed styling to ensure visibility across all loaded themes
+    Object.assign(uiContainer.style, {
+        position: 'fixed',
+        bottom: '20px',
+        left: '20px',
+        width: '320px',
+        maxHeight: '450px',
+        backgroundColor: '#1c1f24',
+        color: '#abb2bf',
+        border: '2px solid #4b5263',
+        borderRadius: '8px',
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        padding: '14px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+        zIndex: '999999',
+        overflowY: 'auto',
+        userSelect: 'none',
+        cursor: 'default'
+    });
+
+    // 3. UI Template Framework
+    uiContainer.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #4b5263; padding-bottom:8px; margin-bottom:10px;">
+            <span style="font-weight:bold; color:#61afef;">⚡ VERITY CRAFT DEV-MENU</span>
+            <button id="dev-close-btn" style="background:none; border:none; color:#e06c75; cursor:pointer; font-weight:bold;">[X]</button>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+            <span style="color:#e5c07b; font-weight:bold;">🔍 Real-time Card Inspection:</span>
+            <div id="dev-player-cards" style="margin-top:5px; background:#21252b; padding:6px; border-radius:4px; max-height:120px; overflow-y:auto;"></div>
+        </div>
+
+        <div style="margin-bottom: 12px; border-top:1px dashed #4b5263; padding-top:10px;">
+            <span style="color:#e5c07b; font-weight:bold;">⚙️ State Manipulation:</span>
+            <div style="margin-top:6px; display:grid; grid-template-columns: 1fr; gap:6px;">
+                <button id="dev-add-coins" style="background:#2c313c; border:1px solid #4b5263; color:#98c379; padding:5px; border-radius:4px; font-family:monospace; cursor:pointer;">+999 Test Coins</button>
+                <button id="dev-force-turn" style="background:#2c313c; border:1px solid #4b5263; color:#61afef; padding:5px; border-radius:4px; font-family:monospace; cursor:pointer;">Force Turn to Me</button>
+            </div>
+        </div>
+
+        <div style="border-top:1px dashed #4b5263; padding-top:10px;">
+            <span style="color:#e5c07b; font-weight:bold;">📡 Network Broadcast Test:</span>
+            <div style="margin-top:6px; display:flex; gap:6px;">
+                <input id="dev-msg-input" type="text" placeholder="Custom arena alert..." style="flex:1; background:#21252b; border:1px solid #4b5263; color:#fff; padding:4px; border-radius:4px; font-family:monospace; font-size:11px;">
+                <button id="dev-send-msg" style="background:#4b5263; border:none; color:#fff; padding:4px 8px; border-radius:4px; font-family:monospace; cursor:pointer;">Emit</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(uiContainer);
+
+    // 4. Utility Refresher Engine
+    let updateInterval = null;
+
+    function refreshInspectorData() {
+        const container = document.getElementById('dev-player-cards');
+        if (!container) return;
+
+        if (typeof window.gamePlayers === 'undefined' || window.gamePlayers.length === 0) {
+            container.innerHTML = `<span style="color:#7f848e; font-style:italic;">No active game matching...</span>`;
+            return;
+        }
+
+        let htmlContent = '';
+        window.gamePlayers.forEach(player => {
+            const cards = Array.isArray(player.hand) ? player.hand : [];
+            const cardDisplay = cards.length > 0 ? cards.join(', ') : 'Empty Hand';
+            const isActiveTurn = window.currentTurnPlayerId === player.id;
+            
+            htmlContent += `
+                <div style="margin-bottom: 4px; font-size:11px; border-bottom:1px solid #2c313c; padding-bottom:2px;">
+                    <strong style="color: ${isActiveTurn ? '#98c379' : '#fff'}">${player.name}:</strong> 
+                    <span style="color:#abb2bf;">[${cardDisplay}]</span>
+                </div>
+            `;
+        });
+        container.innerHTML = htmlContent;
+    }
+
+    // 5. Action Hook Registrations
+    const addCoinsBtn = document.getElementById('dev-add-coins');
+    const forceTurnBtn = document.getElementById('dev-force-turn');
+    const sendMsgBtn = document.getElementById('dev-send-msg');
+    const msgInput = document.getElementById('dev-msg-input');
+    const closeBtn = document.getElementById('dev-close-btn');
+
+    addCoinsBtn.addEventListener('click', () => {
+        if (typeof window.coinBalance !== 'undefined') {
+            window.coinBalance += 999;
+            if (typeof window.updateCoinBalance === 'function') window.updateCoinBalance();
+            console.log(`[DevTools] Injected coins. Current balance: ${window.coinBalance}`);
+        }
+    });
+
+    forceTurnBtn.addEventListener('click', () => {
+        if (!window.gameStarted) {
+            console.warn("[DevTools] Cannot shift turns outside of an active round.");
+            return;
+        }
+        
+        if (window.isHost) {
+            // Find host index inside runtime pool
+            const hostIndex = window.gamePlayers.findIndex(p => p.id === 'host');
+            if (hostIndex !== -1) {
+                window.currentTurnIndex = hostIndex;
+                if (typeof window.broadcastGameState === 'function') {
+                    window.broadcastGameState("Developer forced turn rotation to Host.");
+                }
+            }
+        } else {
+            console.warn("[DevTools] Turn structural parameters must be rewritten from the Host context.");
+        }
+    });
+
+    sendMsgBtn.addEventListener('click', () => {
+        const messageText = msgInput.value.trim();
+        if (!messageText) return;
+
+        if (window.isHost && typeof window.broadcastGameState === 'function') {
+            window.broadcastGameState(`[DEV ALERT] ${messageText}`);
+            msgInput.value = '';
+        } else {
+            console.warn("[DevTools] Message emission requires an active host instance to propagate.");
+        }
+    });
+
+    // 6. Cleanup Protocol
+    function selfDestroy() {
+        clearInterval(updateInterval);
+        uiContainer.remove();
+        window.__VerityDevToolsInstance = null;
+        console.log("[DevTools] Closed and memory references cleared.");
+    }
+
+    closeBtn.addEventListener('click', selfDestroy);
+
+    // Run interval to match UI states dynamically every 500ms
+    updateInterval = setInterval(refreshInspectorData, 500);
+
+    // Bind instance reference globally for safe re-runs
+    window.__VerityDevToolsInstance = {
+        destroy: selfDestroy
+    };
+
+})();
